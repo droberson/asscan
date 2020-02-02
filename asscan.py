@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 """
-TODO: cli for rate
 TODO: cli to adjust timeouts
 TODO: cli for interface/ip address to use
 TODO: select interface with SO_BINDTODEVICE (setsockopt 25)
@@ -225,6 +224,14 @@ def main():
         action="store",
         help="port(s) to scan (Nmap style): 22, 10-100, -")
 
+    parser.add_argument(
+        "-r",
+        "--rate",
+        action="store",
+        type=int,
+        default=1000,
+        help="packets per second. Default 1000")
+
     args = parser.parse_args()
 
     if not args.ports:
@@ -267,9 +274,9 @@ def main():
         if ticks % 100 == 0 and not done:
             elapsed = time.time() - start
             width, _ = terminal_size()
-            outstr = "\r%d scanned. %d found. %d pps. run time %d" % \
-                     (scanned, found, scanned/elapsed, elapsed)
-            sys.stderr.write(outstr.ljust(width - 1))
+            outstr = "\r%d scanned. %d found. %s pps. run time %d" % \
+                     (scanned, found, str(int(scanned/elapsed)).rjust(7), elapsed)
+            sys.stderr.write(outstr.ljust(width))
         elif done:
             width, _ = terminal_size()
             sys.stderr.write("\rDone. Waiting %d seconds...".ljust(width) % \
@@ -299,7 +306,7 @@ def main():
 
         try:
             # rate limit 1kpps
-            if not done and scanned / (time.time() - start) > 1000:
+            if not done and scanned / (time.time() - start) > args.rate:
                 time.sleep(0.001)
                 continue
 
