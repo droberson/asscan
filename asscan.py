@@ -68,6 +68,8 @@ def build_portlist(portlist):
     allowed = set(string.digits + "-,")
     if (set(portlist) <= allowed) is False:
         return list()
+    if portlist == "-":
+        return [port for port in range(65536)]
     ports = portlist.split(",")
     for port in ports:
         if "-" in str(port):
@@ -174,22 +176,20 @@ def scan(rawsock, saddr, daddr, port):
                       tcp_window,
                       tcp_check,
                       tcp_urg_ptr)
-    user_data = b""
+    data = b""
 
     source_address = socket.inet_aton(daddr)
     dest_address = socket.inet_aton(saddr)
     placeholder = 0
     protocol = socket.IPPROTO_TCP
-    tcp_length = len(tcp_header) + len(user_data)
+    tcp_length = len(tcp_header) + len(data)
 
     pseudoheader = pack("!4s4sBBH",
                         source_address,
                         dest_address,
                         placeholder,
                         protocol,
-                        tcp_length)
-    #pseudoheader = pseudoheader + tcp_header + user_data
-    pseudoheader += tcp_header + user_data
+                        tcp_length) + tcp_header + data
 
     tcp_check = checksum(pseudoheader)
 
@@ -203,7 +203,7 @@ def scan(rawsock, saddr, daddr, port):
                       tcp_window) \
                       + pack("H", tcp_check) \
                       + pack("!H", tcp_urg_ptr)
-    rawpacket = ip_header + tcp_header + user_data
+    rawpacket = ip_header + tcp_header + data
     rawsock.sendto(rawpacket, (daddr, 0))
     return True
 
@@ -267,11 +267,9 @@ def main():
         if ticks % 100 == 0 and not done:
             elapsed = time.time() - start
             width, _ = terminal_size()
-            sys.stderr.write("\r%d scanned. %d found. %d pps. run time %d".ljust(width - 1) % \
-                             (scanned,
-                              found,
-                              scanned / elapsed,
-                              elapsed))
+            outstr = "\r%d scanned. %d found. %d pps. run time %d" % \
+                     (scanned, found, scanned/elapsed, elapsed)
+            sys.stderr.write(outstr.ljust(width - 1))
         elif done:
             width, _ = terminal_size()
             sys.stderr.write("\rDone. Waiting %d seconds...".ljust(width) % \
@@ -302,7 +300,6 @@ def main():
         try:
             # rate limit 1kpps
             if not done and scanned / (time.time() - start) > 1000:
-                #print("rate limited")
                 time.sleep(0.001)
                 continue
 
@@ -322,6 +319,7 @@ def main():
             # Check if there are any more ips to scan
             if targets == []:
                 if not done:
+                    sys.stderr.write("\n")
                     sys.stderr.write("\rDone. Waiting 20 seconds...")
                     done = time.time()
                 elif time.time() - done > 20: # wait for stragglers
