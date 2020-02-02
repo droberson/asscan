@@ -17,6 +17,7 @@ import json
 import termios
 import argparse
 import string
+import datetime
 
 from fcntl import ioctl
 from select import select
@@ -274,8 +275,15 @@ def main():
         if ticks % 100 == 0 and not done:
             elapsed = time.time() - start
             width, _ = terminal_size()
-            outstr = "\r%d scanned. %d found. %s pps. run time %d" % \
-                     (scanned, found, str(int(scanned/elapsed)).rjust(7), elapsed)
+            try:
+                remaining = datetime.timedelta(seconds=round((target_generator.total * len(ports)) / args.rate) - round(time.time() - start))
+            except OverflowError:
+                remaining = "A long time"
+            outstr = "\r%d found. %s pps. elapsed %s. %s remaining" % \
+                     (found,
+                      str(int(scanned/elapsed)).rjust(len(str(args.rate))),
+                      datetime.timedelta(seconds=round(elapsed)),
+                      remaining)
             sys.stderr.write(outstr.ljust(width))
         elif done:
             width, _ = terminal_size()
@@ -318,7 +326,7 @@ def main():
             scan(rawsock, my_ip, ip_address, port)
         except IndexError:
             # Grab a new chunk of ips to scan
-            tmp = target_generator.get(1024)
+            tmp = target_generator.get(int(round(target_generator.total / 65535) + 1))
             for port in ports:
                 targets += [[ip, port] for ip in tmp]
             random.shuffle(targets)
